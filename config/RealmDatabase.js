@@ -3,7 +3,6 @@
  */
 
 import { RealmConfig } from './realmConfig';
-import Realm from 'realm';
 import { runInNewContext } from 'vm';
 
 const JobSchema = {
@@ -26,8 +25,16 @@ export default class RealmDatabase {
 
   instance = null; // Use a singleton connection to realm for performance.
 
+  Realm = null;
+
   async init(options = {}) {
     // Connect to realm if database singleton instance has not already been created.
+    try {
+      Realm = require('realm');
+    } catch(e) {
+      throw new Error('Realm could not be imorted')
+    }
+    
     if (this.instance === null) {
       this.instance = await Realm.open({
         path: options.realmPath || RealmConfig.REALM_PATH,
