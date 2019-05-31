@@ -6,7 +6,7 @@
  *
  */
 
-import Database from '../config/Database';
+import RealmDatabase from '../config/RealmDatabase';
 import uuid from 'react-native-uuid';
 import Worker from './Worker';
 import promiseReflect from 'promise-reflect';
@@ -20,8 +20,8 @@ export class Queue {
    *
    * @constructor
    */
-  constructor() {
-    this.realm = null;
+  constructor(database) {
+    this.database = database;
     this.worker = new Worker();
     this.status = 'inactive';
   }
@@ -32,9 +32,10 @@ export class Queue {
    *
    */
   async init() {
-    if (this.realm === null) {
-      this.realm = await Database.getRealmInstance();
+    if (this.database === null) {
+      throw new Error("Database must not be null");
     }
+    await this.database.init();
   }
 
   /**
@@ -92,9 +93,9 @@ export class Queue {
       throw new Error('Invalid job option.');
     }
 
-    this.realm.write(() => {
+    this.database.transactional(() => {
 
-      this.realm.create('Job', {
+      this.database.write('Job', {
         id: uuid.v4(),
         name,
         payload: JSON.stringify(payload),
@@ -212,16 +213,16 @@ export class Queue {
     if (sync) {
 
       let jobs = null;
-      this.realm.write(() => {
+      this.database.transactional(() => {
 
-        jobs = this.realm.objects('Job');
+        jobs = this.database.read('Job');
 
       });
 
       return jobs;
 
     } else {
-      return await this.realm.objects('Job');
+      return await this.database.read('Job');
     }
 
   }
@@ -244,7 +245,7 @@ export class Queue {
 
     let concurrentJobs = [];
 
-    this.realm.write(() => {
+    this.database.transactional(() => {
 
       // Get next job from queue.
       let nextJob = null;
@@ -257,9 +258,17 @@ export class Queue {
         ? 'active == FALSE AND failed == null AND timeout > 0 AND timeout < ' + timeoutUpperBound
         : 'active == FALSE AND failed == null';
 
-      let jobs = this.realm.objects('Job')
-        .filtered(initialQuery)
-        .sorted([['priority', true], ['created', false]]);
+      let jobs = this.database.read('Job', {
+          filter: {
+            sql: initialQuery,
+            callback: j => (((queueLifespanRemaining) && !j.active && !j.failed && j.timeout > 0 && j.timeout < timeoutUpperBound) ||  (!j.active && !j.failed))
+          },
+          sort: {
+            sql: 'priority asc, created desc',
+            callback: (a, b) => (a.priority - b.priority || new Date(b.created) - new Date(a.created)),
+            properties: [['priority', true], ['created', false]]
+          }
+        });
 
       if (jobs.length) {
         nextJob = jobs[0];
@@ -274,9 +283,18 @@ export class Queue {
           ? 'name == "'+ nextJob.name +'" AND active == FALSE AND failed == null AND timeout > 0 AND timeout < ' + timeoutUpperBound
           : 'name == "'+ nextJob.name +'" AND active == FALSE AND failed == null';
 
-        const allRelatedJobs = this.realm.objects('Job')
-          .filtered(allRelatedJobsQuery)
-          .sorted([['priority', true], ['created', false]]);
+        const allRelatedJobs = this.database.read('Job', {
+          filter: {
+            sql: allRelatedJobsQuery,
+            callback: j => (((queueLifespanRemaining) && j.name === nextJob.name && !j.active && !j.failed && j.timeout > 0 && j.timeout < timeoutUpperBound) 
+              ||  (j.name === nextJob.name && !j.active && !j.failed))
+          },
+          sort: {
+            sql: 'priority asc, created desc',
+            callback: (a, b) => (a.priority - b.priority || new Date(b.created) - new Date(a.created)),
+            properties: [['priority', true], ['created', false]]
+          }
+        });
 
         let jobsToMarkActive = allRelatedJobs.slice(0, concurrency);
 
@@ -292,9 +310,17 @@ export class Queue {
 
         // Reselect now-active concurrent jobs by id.
         const reselectQuery = concurrentJobIds.map( jobId => 'id == "' + jobId + '"').join(' OR ');
-        const reselectedJobs = this.realm.objects('Job')
-          .filtered(reselectQuery)
-          .sorted([['priority', true], ['created', false]]);
+        const reselectedJobs = this.database.read('Job', {
+          filter: {
+            sql: reselectQuery,
+            callback: j => (concurrentJobIds.includes(j.id))
+          },
+          sort: {
+            sql: 'priority asc, created desc',
+            callback: (a, b) => (a.priority - b.priority || new Date(b.created) - new Date(a.created)),
+            properties: [['priority', true], ['created', false]]
+          }
+        });
 
         concurrentJobs = reselectedJobs.slice(0, concurrency);
 
@@ -338,9 +364,9 @@ export class Queue {
       await this.worker.executeJob(job);
 
       // On successful job completion, remove job
-      this.realm.write(() => {
+      this.database.transactional(() => {
 
-        this.realm.delete(job);
+        this.database.delete(job);
 
       });
 
@@ -353,7 +379,7 @@ export class Queue {
       // Handle job failure logic, including retries.
       let jobData = JSON.parse(job.data);
 
-      this.realm.write(() => {
+      this.database.transactional(() => {
 
         // Increment failed attempts number
         if (!jobData.failedAttempts) {
@@ -407,21 +433,25 @@ export class Queue {
 
     if (jobName) {
 
-      this.realm.write(() => {
+      this.database.transactional(() => {
 
-        let jobs = this.realm.objects('Job')
-          .filtered('name == "' + jobName + '"');
+        let jobs = this.database.read('Job', {
+          filter: {
+            sql: 'name == "' + jobName + '"',
+            callback: j => (j.name === jobName)
+          }
+        });
 
         if (jobs.length) {
-          this.realm.delete(jobs);
+          this.database.delete(jobs);
         }
 
       });
 
     } else {
-      this.realm.write(() => {
+      this.database.transactional(() => {
 
-        this.realm.deleteAll();
+        this.database.deleteAll();
 
       });
     }
@@ -437,9 +467,9 @@ export class Queue {
  *
  * @return {Queue} - A queue instance.
  */
-export default async function queueFactory() {
+export default async function queueFactory(database) {
 
-  const queue = new Queue();
+  const queue = new Queue(database);
   await queue.init();
 
   return queue;

@@ -6,13 +6,14 @@
 import should from 'should'; // eslint-disable-line no-unused-vars
 import QueueFactory, { Queue } from '../Models/Queue';
 import Worker from '../Models/Worker';
+import RealmDatabase from '../config/RealmDatabase';
 
 describe('Models/Queue', function() {
 
   beforeEach(async () => {
 
     // Make sure each test starts with a fresh database.
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
 
   });
@@ -23,7 +24,7 @@ describe('Models/Queue', function() {
 
   it('#start(lifespan) queue with lifespan does not process jobs that have no timeout set.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
 
     queue.addWorker(jobName, () => {});
@@ -55,7 +56,7 @@ describe('Models/Queue', function() {
 
   it('#start(lifespan) FUNDAMENTAL TEST (queue started with lifespan will process a job with job timeout set).', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
 
@@ -108,7 +109,7 @@ describe('Models/Queue', function() {
       return true;
     }
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     const queueLifespan = 2000;
@@ -263,7 +264,7 @@ describe('Models/Queue', function() {
       return true;
     }
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     const anotherJobName = 'another-job-name';
@@ -574,7 +575,7 @@ describe('Models/Queue', function() {
     Date.now.mockReturnValueOnce(0);
     Date.now.mockReturnValueOnce(1000);
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     let counter = 0;
 
@@ -614,7 +615,7 @@ describe('Models/Queue', function() {
     Date.now.mockReturnValueOnce(500);
     Date.now.mockReturnValueOnce(2000);
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     let counter = 0;
 
@@ -663,43 +664,21 @@ describe('Models/Queue', function() {
 
   it('#constructor() sets values correctly', async () => {
 
-    const queueNotInitialized = new Queue();
+    const db = new RealmDatabase();
+
+    const queueNotInitialized = new Queue(db);
 
     queueNotInitialized.should.have.properties({
-      realm: null,
+      database: db,
       worker: new Worker(),
       status: 'inactive'
     });
 
   });
 
-  it('QueueFactory initializes Realm', async () => {
-
-    const queue = await QueueFactory();
-
-    queue.realm.constructor.name.should.equal('Realm');
-
-  });
-
-  it('init() Calling init() multiple times will only set queue.realm once.', async () => {
-
-    const queue = await QueueFactory();
-
-    queue.realm.constructor.name.should.equal('Realm');
-
-    // Overwrite realm instance to test it doesn't get set to the actual
-    // Realm singleton instance again in init() since queue.realm is no longer null.
-    queue.realm = 'arbitrary-string';
-
-    queue.init();
-
-    queue.realm.should.equal('arbitrary-string');
-
-  });
-
   it('#addWorker() and removeWorker() should pass calls through to Worker class', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const workerOptions = {
       concurrency: 4,
       onSuccess: async () => {}
@@ -727,7 +706,7 @@ describe('Models/Queue', function() {
 
   it('#createJob() requires job name at minimum', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
 
     try {
       await queue.createJob();
@@ -740,7 +719,7 @@ describe('Models/Queue', function() {
 
   it('#createJob() should validate job options.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
 
     queue.addWorker(jobName, () => {});
@@ -767,7 +746,7 @@ describe('Models/Queue', function() {
 
   it('#createJob() should apply defaults correctly', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
 
     queue.addWorker(jobName, () => {});
@@ -793,7 +772,7 @@ describe('Models/Queue', function() {
 
   it('#createJob() should create a new job on the queue', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const payload = { data: 'example-data' };
     const jobOptions = { priority: 4, timeout: 3000, attempts: 3};
@@ -820,7 +799,7 @@ describe('Models/Queue', function() {
 
   it('#createJob() should default to starting queue. stop() should stop queue.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const payload = { data: 'example-data' };
     const jobOptions = { priority: 4, timeout: 3000, attempts: 3};
@@ -838,7 +817,7 @@ describe('Models/Queue', function() {
 
   it('#start() should start queue.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const payload = { data: 'example-data' };
     const jobOptions = { priority: 4, timeout: 3000, attempts: 3};
@@ -881,7 +860,7 @@ describe('Models/Queue', function() {
 
   it('#start() called when queue is already active should NOT fire up a concurrent queue.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const payload = { data: 'example-data' };
     const jobOptions = { priority: 4, timeout: 3000, attempts: 3};
@@ -917,7 +896,7 @@ describe('Models/Queue', function() {
 
   it('#getJobs() should grab all jobs in queue.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const payload = { data: 'example-data' };
     const jobOptions = { priority: 4, timeout: 3000, attempts: 3};
@@ -942,7 +921,7 @@ describe('Models/Queue', function() {
 
   it('#getConcurrentJobs(queueLifespanRemaining) should work as expected for queues started with a lifespan.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
 
     queue.addWorker(jobName, () => {}, {
@@ -1039,7 +1018,7 @@ describe('Models/Queue', function() {
 
   it('#getConcurrentJobs() If worker concurrency is set to 3, getConcurrentJobs() should get up to 3 of same type of job as next job on top of queue.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const jobOptions = { priority: 4, timeout: 3000, attempts: 3};
 
@@ -1071,7 +1050,7 @@ describe('Models/Queue', function() {
 
   it('#getConcurrentJobs() If worker concurrency is set to 10, but only 4 jobs of next job type exist, getConcurrentJobs() should only return 4 jobs.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const jobOptions = { priority: 4, timeout: 3000, attempts: 3};
 
@@ -1104,7 +1083,7 @@ describe('Models/Queue', function() {
 
   it('#getConcurrentJobs() Ensure that priority is respected.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const jobOptions = { priority: 0, timeout: 3000, attempts: 3};
 
@@ -1142,7 +1121,7 @@ describe('Models/Queue', function() {
 
   it('#getConcurrentJobs() Marks selected jobs as "active"', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const jobOptions = { priority: 0, timeout: 3000, attempts: 3};
 
@@ -1178,7 +1157,7 @@ describe('Models/Queue', function() {
 
   it('#getConcurrentJobs() consecutive calls to getConcurrentJobs() gets new non-active jobs (and marks them active).', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const jobOptions = { priority: 0, timeout: 3000, attempts: 3};
 
@@ -1245,7 +1224,7 @@ describe('Models/Queue', function() {
 
   it('#processJob() executes job worker then deletes job on success', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const jobOptions = { priority: 0, timeout: 3000, attempts: 3};
 
@@ -1298,7 +1277,7 @@ describe('Models/Queue', function() {
 
   it('#processJob() increments failedAttempts counter until max attempts then fails on job failure.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     const jobOptions = { priority: 0, timeout: 3000, attempts: 3};
@@ -1406,7 +1385,7 @@ describe('Models/Queue', function() {
 
   it('#processJob() logs errors on job failure', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const jobOptions = { priority: 0, timeout: 5000, attempts: 3};
 
@@ -1462,7 +1441,7 @@ describe('Models/Queue', function() {
 
   it('#processJob() handles a job timeout as expected', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const jobOptions = { priority: 0, timeout: 500, attempts: 1};
 
@@ -1500,7 +1479,7 @@ describe('Models/Queue', function() {
 
   it('#flushQueue(name) should delete all jobs in the queue of type "name".', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const jobOptions = { priority: 0, timeout: 3000, attempts: 3};
 
@@ -1543,7 +1522,7 @@ describe('Models/Queue', function() {
 
   it('#flushQueue() should delete all jobs in the queue.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     const jobName = 'job-name';
     const jobOptions = { priority: 0, timeout: 3000, attempts: 3};
 
@@ -1577,11 +1556,11 @@ describe('Models/Queue', function() {
 
   it('#flushQueue(name) does not bother with delete query if no jobs exist already.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
 
     // Mock queue.realm.delete() so we can test that it has not been called.
     let hasDeleteBeenCalled = false;
-    queue.realm.delete = () => {
+    queue.database.delete = () => {
       hasDeleteBeenCalled = true; // Switch flag if function gets called.
     };
 
@@ -1606,7 +1585,7 @@ describe('Models/Queue', function() {
       return true;
     }
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     let jobProcessed = false;
@@ -1657,7 +1636,7 @@ describe('Models/Queue', function() {
       return true;
     }
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     let jobProcessed = false;
@@ -1726,7 +1705,7 @@ describe('Models/Queue', function() {
       return true;
     }
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     let jobProcessStarted = false;
@@ -1785,7 +1764,7 @@ describe('Models/Queue', function() {
       return true;
     }
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     let jobAttemptCounter = 0;
@@ -1842,7 +1821,7 @@ describe('Models/Queue', function() {
       return true;
     }
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     let jobAttemptCounter = 0;
@@ -1920,7 +1899,7 @@ describe('Models/Queue', function() {
       return true;
     }
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     let jobAttemptCounter = 0;
@@ -1984,7 +1963,7 @@ describe('Models/Queue', function() {
       return true;
     }
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     let workTracker = [];
@@ -2079,7 +2058,7 @@ describe('Models/Queue', function() {
       return true;
     }
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
     let workTracker = [];
@@ -2162,7 +2141,7 @@ describe('Models/Queue', function() {
    */
   it('does not override an explicitly set job timeout value of 0 with the default value of 25000.', async () => {
 
-    const queue = await QueueFactory();
+    const queue = await QueueFactory(new RealmDatabase());
     queue.flushQueue();
     const jobName = 'job-name';
 
