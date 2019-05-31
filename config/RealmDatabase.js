@@ -29,13 +29,13 @@ export default class RealmDatabase {
   async init(options = {}) {
     // Connect to realm if database singleton instance has not already been created.
     try {
-      Realm = require('realm');
+      this.Realm = require('realm');
     } catch(e) {
       throw new Error('Realm could not be imorted')
     }
     
     if (this.instance === null) {
-      this.instance = await Realm.open({
+      this.instance = await this.Realm.open({
         path: options.realmPath || RealmConfig.REALM_PATH,
         schemaVersion: RealmConfig.REALM_SCHEMA_VERSION,
         schema: [JobSchema]
