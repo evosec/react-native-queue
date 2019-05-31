@@ -3,7 +3,6 @@
  */
 
 import { RealmConfig } from './realmConfig';
-import { runInNewContext } from 'vm';
 
 const JobSchema = {
   name: 'Job',
