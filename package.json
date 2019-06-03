@@ -29,6 +29,8 @@
     "react-native-uuid": "^1.4.9"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-decorators": "^7.4.4",
+    "@nozbe/watermelondb": "^0.12.3",
     "babel-eslint": "^8.0.3",
     "babel-jest": "^21.2.0",
     "babel-preset-react-native": "^4.0.0",
